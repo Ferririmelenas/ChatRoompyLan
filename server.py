@@ -1,0 +1,83 @@
+import socket
+import threading
+import json
+
+clients = []
+nicknames = []
+
+HOST = "0.0.0.0"
+CHAT_PORT = 50000  # TCP for chat messages
+PING_PORT = 50020  # UDP for server discovery
+
+
+def GetServerName():
+    global serverName
+    serverName = input("Select server name\n")
+    if serverName == "":
+        serverName = "DefaultServer"
+
+GetServerName()
+print(serverName + " is listening...")
+
+server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server.bind((HOST, CHAT_PORT))
+server.listen()
+
+serverPing = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+serverPing.bind((HOST, PING_PORT))
+
+def broadcast(message):
+    for client in clients:
+        try:
+            client.send(message)
+        except:
+            pass  # ignore broken connections
+
+def handle(client):
+    while True:
+        try:
+            message = client.recv(1024)
+            broadcast(message)
+        except:
+            if client in clients:
+                index = clients.index(client)
+                client.close()
+                nickname = nicknames[index]
+                clients.pop(index)
+                nicknames.pop(index)
+                broadcast(f"{nickname} left the chat!".encode("ascii"))
+            break
+
+def getping():
+    while True:
+        print("does this work??")
+        data, addr = serverPing.recvfrom(1024)
+        print(f"received ping from {addr}")
+        payload = {
+            "serverName": serverName,
+            "clientCount": len(clients),
+            "chatPort": CHAT_PORT,
+        }
+        serverPing.sendto(json.dumps(payload).encode(), addr)
+
+def getNewUsers():
+    while True:
+        newSocket, Address = server.accept()
+        print(f"Connected with {str(Address)}")
+
+        newSocket.send("NICKNAME1234".encode("ascii"))
+        nickname = newSocket.recv(1024).decode()
+        nicknames.append(nickname)
+        clients.append(newSocket)
+
+        broadcast(f"{nickname} joined the chat!".encode("ascii"))
+        newSocket.send("Connected to server!".encode("ascii"))
+
+        thread = threading.Thread(target=handle, args=(newSocket,))
+        thread.start()
+
+threading.Thread(target=getNewUsers).start()
+threading.Thread(target=getping).start()
+
+input("Press enter to exit server")
+print("exiting")
