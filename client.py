@@ -77,8 +77,6 @@ def send():
     while True:
         try:
             message1 = input('')
-            if message1 == "EXIT":
-                client.close()
             message = f"{nickname}: {message1}"
             client.send(message.encode("ascii"))
         except:

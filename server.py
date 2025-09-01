@@ -36,18 +36,24 @@ def broadcast(message):
 def handle(client):
     while True:
         try:
-            message = client.recv(1024)
+            message = client.recv(1024).decode()
+            if message == b"":
+                continue
+            elif message == "EXIT":
+                disconnectClient(client)
+                break
             broadcast(message)
         except:
             if client in clients:
-                index = clients.index(client)
-                client.close()
-                nickname = nicknames[index]
-                clients.pop(index)
-                nicknames.pop(index)
-                broadcast(f"{nickname} left the chat!".encode("ascii"))
+               disconnectClient(client)
             break
-
+def disconnectClient(client):
+    index = clients.index(client)
+    client.close()
+    nickname = nicknames[index]
+    clients.pop(index)
+    nicknames.pop(index)
+    broadcast(f"{nickname} left the chat!".encode("ascii"))
 def getping():
     while True:
         print("does this work??")
