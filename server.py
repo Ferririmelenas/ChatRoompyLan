@@ -37,12 +37,12 @@ def handle(client):
     while True:
         try:
             message = client.recv(1024).decode()
-            if message == b"":
+            if message == "":
                 continue
             elif message == "EXIT":
                 disconnectClient(client)
                 break
-            broadcast(message)
+            broadcast(message.encode("ascii"))
         except:
             if client in clients:
                disconnectClient(client)
