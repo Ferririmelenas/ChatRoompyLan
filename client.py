@@ -1,89 +1,112 @@
 import socket
 import threading
 import json
+import time
 
-clients = []
-nicknames = []
-
-HOST = "0.0.0.0"
 CHAT_PORT = 50000  # TCP for chat messages
 PING_PORT = 50020  # UDP for server discovery
 
 
-def GetServerName():
-    global serverName
-    serverName = input("Select server name\n")
-    if serverName == "":
-        serverName = "DefaultServer"
+client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+pingClient = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+pingClient.bind(("0.0.0.0", PING_PORT))
+pingClient.settimeout(2)
 
-GetServerName()
-print(serverName + " is listening...")
+selectedServers = []
+doLoop = False
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.bind((HOST, CHAT_PORT))
-server.listen()
-
-serverPing = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-serverPing.bind((HOST, PING_PORT))
-
-def broadcast(message):
-    for client in clients:
+def GetPing():
+    global doLoop
+    mockIndex = 1
+    while doLoop:
         try:
-            client.send(message)
-        except:
-            pass  # ignore broken connections
-
-def handle(client):
-    while True:
-        try:
-            message = client.recv(1024).decode()
-            if message == "":
+            data, addr = pingClient.recvfrom(1024)
+            if data.decode() == "Ping":
                 continue
-            elif message == "EXIT":
-                disconnectClient(client)
-                break
-            broadcast(message.encode("ascii"))
+            payload = json.loads(data.decode())
+            print(f"{mockIndex}. {payload['serverName']} {payload['clientCount']} active")
+            # Use the *source addr* as server IP
+            selectedServers.append((addr[0], payload['chatPort']))
+            mockIndex += 1
+        except socket.timeout:
+            continue
+
+def PingAllServers():
+    selectedServers.clear()
+    global doLoop
+    doLoop = True
+    threading.Thread(target=GetPing, daemon=True).start()
+
+    pingClient.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    pingClient.sendto("Ping".encode("ascii"), ("192.168.0.255", PING_PORT))
+
+    time.sleep(2)
+    doLoop = False
+
+def askForName():
+    global nickname
+    nickname = input("Whats your name\n").strip()
+    if nickname == "":
+        print("cant be nothing!")
+        return askForName()
+
+def startConnection(addr):
+    global client  # make sure we reassign
+    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # create a new socket
+    try:
+        client.connect(addr)
+    except Exception as e:
+        print(f"Could not connect to server: {e}")
+        return
+    threading.Thread(target=recieve, daemon=True).start()
+    send()
+
+def recieve():
+    while True:
+        try:
+            message = client.recv(1024).decode("ascii")
+            if message == "NICKNAME1234":
+                client.send(nickname.encode("ascii"))
+            else:
+                print(message)
         except:
-            if client in clients:
-               disconnectClient(client)
+            client.close()
             break
-def disconnectClient(client):
-    index = clients.index(client)
-    client.close()
-    nickname = nicknames[index]
-    clients.pop(index)
-    nicknames.pop(index)
-    broadcast(f"{nickname} left the chat!".encode("ascii"))
-def getping():
+
+def send():
     while True:
-        print("does this work??")
-        data, addr = serverPing.recvfrom(1024)
-        print(f"received ping from {addr}")
-        payload = {
-            "serverName": serverName,
-            "clientCount": len(clients),
-            "chatPort": CHAT_PORT,
-        }
-        serverPing.sendto(json.dumps(payload).encode(), addr)
+        try:
+            message1 = input('')
+            message = f"{nickname}: {message1}"
+            client.send(message.encode("ascii"))
+        except:
+            break
 
-def getNewUsers():
+def selectServer():
+    option = input("Which server (numbers): ")
+    if not option.isnumeric():
+        print("invalid!!!")
+        return selectServer()
+    option = int(option)
+    if 1 <= option <= len(selectedServers):
+        addr = selectedServers[option - 1]
+        print(f"Selected {addr}...")
+        return startConnection(addr)
+    else:
+        print("invalid!!!")
+
+def MainLoop():
     while True:
-        newSocket, Address = server.accept()
-        print(f"Connected with {str(Address)}")
+        print("\n1.Refresh Servers\n2.Select server to connect\n3.Change nickname")
+        option = input()
+        if option == "1":
+            PingAllServers()
+        elif option == "2":
+            selectServer()
+        elif option == "3":
+            askForName()
+        else:
+            print("Invalid option!")
 
-        newSocket.send("NICKNAME1234".encode("ascii"))
-        nickname = newSocket.recv(1024).decode()
-        nicknames.append(nickname)
-        clients.append(newSocket)
-
-        broadcast(f"{nickname} joined the chat!".encode("ascii"))
-        newSocket.send("Connected to server!".encode("ascii"))
-
-        thread = threading.Thread(target=handle, args=(newSocket,))
-        thread.start()
-
-threading.Thread(target=getNewUsers).start()
-threading.Thread(target=getping).start()
-
-input("Press enter to exit server")
-print("exiting")
+askForName()
+MainLoop()
