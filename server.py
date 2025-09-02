@@ -38,14 +38,15 @@ def handle(client):
         try:
 
             jsonTupleMessage = client.recv(1024).decode()
+            rawTuple = tuple(json.loads(jsonTupleMessage))
 
-            rawTuple = tuple(json.loads(jsonTupleMessage.decode()))
 
             nickname,message = rawTuple
 
             if message == "":
                 continue 
             elif message == "EXIT":
+                print(f"{nickname} left!")
                 disconnectClient(client)
                 break
             concatenatedMessage = f"{nickname}: {message}".encode("ascii")
@@ -63,9 +64,9 @@ def disconnectClient(client):
     broadcast(f"[SERVER]{nickname} left the chat!".encode("ascii"))
 def getping():
     while True:
-        print("does this work??")
+        print("listening for pings...")
         data, addr = serverPing.recvfrom(1024)
-        print(f"received ping from {addr}")
+        print(f"Recieved ping from {addr}")
         payload = {
             "serverName": serverName,
             "clientCount": len(clients),
