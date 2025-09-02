@@ -36,13 +36,20 @@ def broadcast(message):
 def handle(client):
     while True:
         try:
-            message = client.recv(1024).decode()
+
+            jsonTupleMessage = client.recv(1024).decode()
+
+            rawTuple = tuple(json.loads(jsonTupleMessage.decode()))
+
+            nickname,message = rawTuple
+
             if message == "":
-                continue
+                continue 
             elif message == "EXIT":
                 disconnectClient(client)
                 break
-            broadcast(message.encode("ascii"))
+            concatenatedMessage = f"{nickname}: {message}".encode("ascii")
+            broadcast(concatenatedMessage)
         except:
             if client in clients:
                disconnectClient(client)
@@ -53,7 +60,7 @@ def disconnectClient(client):
     nickname = nicknames[index]
     clients.pop(index)
     nicknames.pop(index)
-    broadcast(f"{nickname} left the chat!".encode("ascii"))
+    broadcast(f"[SERVER]{nickname} left the chat!".encode("ascii"))
 def getping():
     while True:
         print("does this work??")
@@ -66,6 +73,7 @@ def getping():
         }
         serverPing.sendto(json.dumps(payload).encode(), addr)
 
+
 def getNewUsers():
     while True:
         newSocket, Address = server.accept()
@@ -76,7 +84,7 @@ def getNewUsers():
         nicknames.append(nickname)
         clients.append(newSocket)
 
-        broadcast(f"{nickname} joined the chat!".encode("ascii"))
+        broadcast(f"[SERVER]{nickname} joined the chat!".encode("ascii"))
         newSocket.send("Connected to server!".encode("ascii"))
 
         thread = threading.Thread(target=handle, args=(newSocket,))
