@@ -57,6 +57,7 @@ def handle(client):
             break
 def disconnectClient(client):
     index = clients.index(client)
+    client.send("EXIT".encode("ascii"))
     client.close()
     nickname = nicknames[index]
     clients.pop(index)
@@ -96,3 +97,10 @@ threading.Thread(target=getping).start()
 
 input("Press enter to exit server")
 print("exiting")
+broadcast("SERVER IS CLOSING")
+server.close()
+for client in clients:
+    client.send("EXIT".encode("ascii"))
+    client.close()
+    
+exit()
