@@ -66,6 +66,8 @@ def recieve():
             message = client.recv(1024).decode("ascii")
             if message == "NICKNAME1234":
                 client.send(nickname.encode("ascii"))
+            elif message == "EXIT":
+                client.close()
             else:
                 # Print message cleanly above the prompt
                 print(f"\n{message}")
