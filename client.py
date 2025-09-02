@@ -77,8 +77,8 @@ def send():
     while True:
         try:
             message1 = input('')
-            message = f"{nickname}: {message1}"
-            client.send(message.encode("ascii"))
+            realMessage = json.dumps((nickname,message1))
+            client.send(realMessage.encode())
         except:
             break
 
