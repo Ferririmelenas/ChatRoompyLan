@@ -68,6 +68,7 @@ def recieve():
                 client.send(nickname.encode("ascii"))
             elif message == "EXIT":
                 client.close()
+                print("exited successfully! \nPress Enter to go to main menu")
             else:
                 # Print message cleanly above the prompt
                 print(f"\n{message}")
