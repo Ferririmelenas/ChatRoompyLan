@@ -60,7 +60,6 @@ def startConnection(addr):
         return
     threading.Thread(target=recieve, daemon=True).start()
     send()
-
 def recieve():
     while True:
         try:
@@ -68,7 +67,9 @@ def recieve():
             if message == "NICKNAME1234":
                 client.send(nickname.encode("ascii"))
             else:
-                print(message)
+                # Print message cleanly above the prompt
+                print(f"\n{message}")
+                print("> ", end="", flush=True)
         except:
             client.close()
             break
@@ -76,8 +77,11 @@ def recieve():
 def send():
     while True:
         try:
-            message1 = input('')
-            realMessage = json.dumps((nickname,message1))
+            # Show prompt nicely
+            message1 = input("> ")
+            if not message1.strip():
+                continue  # skip empty sends
+            realMessage = json.dumps((nickname, message1))
             client.send(realMessage.encode())
         except:
             break
