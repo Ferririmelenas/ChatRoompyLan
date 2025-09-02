@@ -86,9 +86,9 @@ def getNewUsers():
     while True:
         newSocket, Address = server.accept()
         print(f"Connected with {str(Address)}")
-        if colorIndex == 7:
-            colorIndex = 3
-        colors.append(colorIndex)
+        if colorIndex == 5:
+            colorIndex = 1
+        colors.append(colorIndex + 2)
         newSocket.send("NICKNAME1234".encode("ascii"))
         nickname = newSocket.recv(1024).decode()
         nicknames.append(nickname)
