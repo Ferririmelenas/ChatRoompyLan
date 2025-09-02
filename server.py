@@ -2,114 +2,148 @@ import socket
 import threading
 import json
 
-colorIndex = 1
-
 clients = []
 nicknames = []
-colors =  []
+colors = []
 
 HOST = "0.0.0.0"
 CHAT_PORT = 50000  # TCP for chat messages
 PING_PORT = 50020  # UDP for server discovery
 
+colorIndex = 1  # Global color index for new clients
 
-def GetServerName():
-    global serverName
-    serverName = input("Select server name\n")
-    if serverName == "":
-        serverName = "DefaultServer"
+# Ask for server name
+serverName = input("Select server name\n").strip() or "DefaultServer"
+print(f"{serverName} is listening...")
 
-GetServerName()
-print(serverName + " is listening...")
-
+# TCP for chat messages
 server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server.bind((HOST, CHAT_PORT))
 server.listen()
 
+# UDP for discovery pings
 serverPing = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 serverPing.bind((HOST, PING_PORT))
 
-def broadcast(message):
+
+def broadcast(message, exclude_client=None):
+    """Send message to all clients, except optional excluded one."""
     for client in clients:
+        if client == exclude_client:
+            continue
         try:
             client.send(message)
         except:
-            pass  # ignore broken connections
+            pass
+
 
 def handle(client):
-    index = clients.index(client)
+    """Handle chat messages from a single client."""
+    try:
+        index = clients.index(client)
+        clientColor = colors[index]
+    except ValueError:
+        return  # client not in list
+
     while True:
         try:
-
-            jsonTupleMessage = client.recv(1024).decode()
-            rawTuple = tuple(json.loads(jsonTupleMessage))
-
-
-            nickname,message = rawTuple
-
-            if message == "":
-                continue 
-            elif message == "EXIT":
-                print(f"{nickname} left!")
+            data = client.recv(1024)
+            if not data:
                 disconnectClient(client)
                 break
-            concatenatedMessage = f"\033[3{str(colors[index])}m{nickname}\033[0m: {message}".encode("ascii")
-            broadcast(concatenatedMessage)
+
+            rawTuple = tuple(json.loads(data.decode("ascii")))
+            nickname, message = rawTuple
+
+            if message.strip() == "":
+                continue
+            elif message == "EXIT":
+                disconnectClient(client)
+                break
+
+            formatted = f"\033[3{clientColor}m{nickname}\033[0m: {message}".encode("ascii")
+            broadcast(formatted)
         except:
-            if client in clients:
-               disconnectClient(client)
+            disconnectClient(client)
             break
+
+
 def disconnectClient(client):
-    index = clients.index(client)
-    client.send("EXIT".encode("ascii"))
-    client.close()
+    """Remove client safely."""
+    try:
+        index = clients.index(client)
+    except ValueError:
+        return  # already removed
+
+    clientColor = colors[index]
     nickname = nicknames[index]
+
+    try:
+        client.send("EXIT".encode("ascii"))
+        client.close()
+    except:
+        pass
+
     clients.pop(index)
     nicknames.pop(index)
     colors.pop(index)
-    broadcast(f"[SERVER] \033[3{str(colors[colorIndex])}m{nickname}\033[0m left the chat!".encode("ascii"))
+
+    broadcast(f"[SERVER] \033[3{clientColor}m{nickname}\033[0m left the chat!".encode("ascii"))
+
+
 def getping():
+    """Respond to UDP ping requests."""
     while True:
-        print("listening for pings...")
         data, addr = serverPing.recvfrom(1024)
-        print(f"Recieved ping from {addr}")
+        if not data:
+            continue
         payload = {
             "serverName": serverName,
             "clientCount": len(clients),
             "chatPort": CHAT_PORT,
         }
-        serverPing.sendto(json.dumps(payload).encode(), addr)
+        serverPing.sendto(json.dumps(payload).encode("ascii"), addr)
 
 
 def getNewUsers():
+    """Accept new clients and assign colors."""
     global colorIndex
+
     while True:
-        newSocket, Address = server.accept()
-        print(f"Connected with {str(Address)}")
-        if colorIndex == 5:
-            colorIndex = 1
-        colors.append(colorIndex + 2)
-        newSocket.send("NICKNAME1234".encode("ascii"))
-        nickname = newSocket.recv(1024).decode()
-        nicknames.append(nickname)
-        clients.append(newSocket)
-        
-        broadcast(f"[SERVER] \033[3{str(colors[colorIndex])}m{nickname}\033[0m joined the chat!".encode("ascii"))
-        newSocket.send("Connected to server!".encode("ascii"))
+        clientSocket, addr = server.accept()
+        print(f"Connected with {addr}")
 
-        thread = threading.Thread(target=handle, args=(newSocket,))
-        thread.start()
+        # Assign color
+        assignedColor = colorIndex + 2
+        colors.append(assignedColor)
         colorIndex += 1
+        if colorIndex > 5:
+            colorIndex = 1
 
-threading.Thread(target=getNewUsers).start()
-threading.Thread(target=getping).start()
+        # Handle nickname
+        clientSocket.send("NICKNAME1234".encode("ascii"))
+        nickname = clientSocket.recv(1024).decode("ascii")
+        nicknames.append(nickname)
+        clients.append(clientSocket)
 
-input("Press enter to exit server")
-print("exiting")
-broadcast("SERVER IS CLOSING")
-server.close()
+        broadcast(f"[SERVER] \033[3{assignedColor}m{nickname}\033[0m joined the chat!".encode("ascii"))
+        clientSocket.send("Connected to server!".encode("ascii"))
+
+        threading.Thread(target=handle, args=(clientSocket,), daemon=True).start()
+
+
+# Start threads
+threading.Thread(target=getNewUsers, daemon=True).start()
+threading.Thread(target=getping, daemon=True).start()
+
+# Wait for server admin to exit
+input("Press enter to exit server\n")
+print("Exiting...")
+broadcast("SERVER IS CLOSING".encode("ascii"))
 for client in clients:
-    client.send("EXIT".encode("ascii"))
-    client.close()
-    
-exit()
+    try:
+        client.send("EXIT".encode("ascii"))
+        client.close()
+    except:
+        pass
+server.close()
