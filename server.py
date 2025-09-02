@@ -2,8 +2,11 @@ import socket
 import threading
 import json
 
+colorIndex = 1
+
 clients = []
 nicknames = []
+colors =  []
 
 HOST = "0.0.0.0"
 CHAT_PORT = 50000  # TCP for chat messages
@@ -34,6 +37,7 @@ def broadcast(message):
             pass  # ignore broken connections
 
 def handle(client):
+    index = clients.index(client)
     while True:
         try:
 
@@ -49,7 +53,7 @@ def handle(client):
                 print(f"{nickname} left!")
                 disconnectClient(client)
                 break
-            concatenatedMessage = f"{nickname}: {message}".encode("ascii")
+            concatenatedMessage = f"\033[3{str(colors[index])}m{nickname}\033[0m: {message}".encode("ascii")
             broadcast(concatenatedMessage)
         except:
             if client in clients:
@@ -62,7 +66,8 @@ def disconnectClient(client):
     nickname = nicknames[index]
     clients.pop(index)
     nicknames.pop(index)
-    broadcast(f"[SERVER]{nickname} left the chat!".encode("ascii"))
+    colors.pop(index)
+    broadcast(f"[SERVER] \033[3{str(colors[colorIndex])}m{nickname}\033[0m left the chat!".encode("ascii"))
 def getping():
     while True:
         print("listening for pings...")
@@ -77,20 +82,24 @@ def getping():
 
 
 def getNewUsers():
+    global colorIndex
     while True:
         newSocket, Address = server.accept()
         print(f"Connected with {str(Address)}")
-
+        if colorIndex == 7:
+            colorIndex = 3
+        colors.append(colorIndex)
         newSocket.send("NICKNAME1234".encode("ascii"))
         nickname = newSocket.recv(1024).decode()
         nicknames.append(nickname)
         clients.append(newSocket)
-
-        broadcast(f"[SERVER]{nickname} joined the chat!".encode("ascii"))
+        
+        broadcast(f"[SERVER] \033[3{str(colors[colorIndex])}m{nickname}\033[0m joined the chat!".encode("ascii"))
         newSocket.send("Connected to server!".encode("ascii"))
 
         thread = threading.Thread(target=handle, args=(newSocket,))
         thread.start()
+        colorIndex += 1
 
 threading.Thread(target=getNewUsers).start()
 threading.Thread(target=getping).start()
